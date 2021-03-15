@@ -54,6 +54,173 @@
       </tags>
   </entry>
   <entry>
+    <title>使用 Docker 快速部署 Shadowsocks-libev + v2ray-plugin</title>
+    <url>/2021/03/15/%E4%BD%BF%E7%94%A8-Docker-%E5%BF%AB%E9%80%9F%E9%83%A8%E7%BD%B2-Shadowsocks-libev-v2ray-plugin/</url>
+    <content><![CDATA[<p><a href="https://teddysun.com/569.html"><img src="https://teddysun.com/wp-content/uploads/2014/shadowsocks.png"></a></p>
+<span id="more"></span>
+<h3 id="条件准备"><a href="#条件准备" class="headerlink" title="条件准备"></a>条件准备</h3><p>一台墙外 VPS；<br>一台安装好 SSH 客户端的本地电脑；<br>如果需要 tls 功能则需要准备一个域名以及一个 Cloudflare 账号。</p>
+<h3 id="一、安装-Docker"><a href="#一、安装-Docker" class="headerlink" title="一、安装 Docker"></a>一、安装 Docker</h3><h4 id="1-1-以-root-用户登录，执行一键脚本安装-Docker"><a href="#1-1-以-root-用户登录，执行一键脚本安装-Docker" class="headerlink" title="1.1 以 root 用户登录，执行一键脚本安装 Docker"></a>1.1 以 root 用户登录，执行一键脚本安装 Docker</h4><p>以 Debian 系为例，升级源并安装软件</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">$ apt-<span class="built_in">get</span> <span class="keyword">update</span> &amp;&amp; apt-<span class="built_in">get</span> install -<span class="keyword">y</span> wget <span class="keyword">vim</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>执行此命令等候自动安装 Docker</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">$ wget -qO- <span class="built_in">get</span>.docker.<span class="keyword">com</span> | bash</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><strong>说明：</strong>推荐使用 KVM 架构的 VPS，OpenVZ 架构的 VPS 不支持安装 Docker，另外 CentOS 8 不支持用此脚本来安装 Docker。</p>
+<h4 id="1-2-对-Docker-的一些命令操作"><a href="#1-2-对-Docker-的一些命令操作" class="headerlink" title="1.2 对 Docker 的一些命令操作"></a>1.2 对 Docker 的一些命令操作</h4><p>查看 Docker 安装版本等信息</p>
+<figure class="highlight livecodeserver"><table><tr><td class="code"><pre><span class="line">$ docker <span class="built_in">version</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>启动 Docker 服务</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line"><span class="variable">$</span> systemctl <span class="built_in">start</span> docker</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>查看 Docker 运行状态</p>
+<figure class="highlight lua"><table><tr><td class="code"><pre><span class="line">$ systemctl <span class="built_in">status</span> docker</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>将 Docker 服务加入开机自启动</p>
+<figure class="highlight routeros"><table><tr><td class="code"><pre><span class="line">$ systemctl <span class="builtin-name">enable</span> docker</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>下面讲解的配置从上往下，难度由简到繁，如果你想一步到位，建议跳过二，三步，直接看第四步。</p>
+<h3 id="二、用-Docker-部署-Shadowsocks-libev-v2ray-plugin-over-websocket-HTTP"><a href="#二、用-Docker-部署-Shadowsocks-libev-v2ray-plugin-over-websocket-HTTP" class="headerlink" title="二、用 Docker 部署 Shadowsocks-libev + v2ray-plugin over websocket (HTTP)"></a>二、用 Docker 部署 Shadowsocks-libev + v2ray-plugin over websocket (HTTP)</h3><h4 id="2-1-创建配置文件"><a href="#2-1-创建配置文件" class="headerlink" title="2.1 创建配置文件"></a>2.1 创建配置文件</h4><p>在 /etc 目录下创建 shadowsocks-libev 目录</p>
+<figure class="highlight awk"><table><tr><td class="code"><pre><span class="line">$ mkdir <span class="regexp">/etc/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>切换目录至 /etc/shadowsocks-libev</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ cd <span class="regexp">/etc/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>创建并开始编辑名为 config.json 的配置文件</p>
+<figure class="highlight mipsasm"><table><tr><td class="code"><pre><span class="line">$ vim <span class="built_in">config</span>.<span class="keyword">json</span></span><br><span class="line"><span class="keyword"></span></span><br></pre></td></tr></table></figure>
+
+<p>以下为配置文件内容示例，添加后保存并退出</p>
+<figure class="highlight json"><table><tr><td class="code"><pre><span class="line">&#123;</span><br><span class="line"><span class="attr">&quot;server&quot;</span>:<span class="string">&quot;0.0.0.0&quot;</span>,</span><br><span class="line"><span class="attr">&quot;server_port&quot;</span>:<span class="number">9000</span>,</span><br><span class="line"><span class="attr">&quot;method&quot;</span>:<span class="string">&quot;aes-256-gcm&quot;</span>,</span><br><span class="line"><span class="attr">&quot;timeout&quot;</span>:<span class="number">300</span>,</span><br><span class="line"><span class="attr">&quot;password&quot;</span>:<span class="string">&quot;password0&quot;</span>,</span><br><span class="line"><span class="attr">&quot;fast_open&quot;</span>:<span class="literal">false</span>,</span><br><span class="line"><span class="attr">&quot;nameserver&quot;</span>:<span class="string">&quot;8.8.8.8&quot;</span>,</span><br><span class="line"><span class="attr">&quot;mode&quot;</span>:<span class="string">&quot;tcp_and_udp&quot;</span>,</span><br><span class="line"><span class="attr">&quot;plugin&quot;</span>:<span class="string">&quot;v2ray-plugin&quot;</span>,</span><br><span class="line"><span class="attr">&quot;plugin_opts&quot;</span>:<span class="string">&quot;server&quot;</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><strong>说明：</strong>server 后面默认填 0.0.0.0，请不要修改。关于更多参数用法和说明请参考：<a href="https://github.com/shadowsocks/shadowsocks-libev/blob/master/doc/shadowsocks-libev.asciidoc">这个链接</a><br>值得注意的是，如果把 plugin_opts 改为</p>
+<figure class="highlight llvm"><table><tr><td class="code"><pre><span class="line"><span class="string">&quot;plugin_opts&quot;</span>:<span class="string">&quot;server;mux=0&quot;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>后就可以用 Quantumult X。</p>
+<h4 id="2-2-用-Docker-结合上面的配置文件创建并启动容器"><a href="#2-2-用-Docker-结合上面的配置文件创建并启动容器" class="headerlink" title="2.2 用 Docker 结合上面的配置文件创建并启动容器"></a>2.2 用 Docker 结合上面的配置文件创建并启动容器</h4><p>命令如下：</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ docker run -d --name ss-libev --restart always -p <span class="number">9000</span>:<span class="number">9000</span> -p <span class="number">9000</span>:<span class="number">9000</span><span class="regexp">/udp -v /</span>etc<span class="regexp">/shadowsocks-libev:/</span>etc<span class="regexp">/shadowsocks-libev teddysun/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>参数解释：<br>docker run：开始运行一个容器<br>-d 参数：容器以后台运行并输出容器 ID<br>–name 参数：给容器分配一个识别符，方便将来的启动，停止，删除等操作<br>–restart 参数：配置容器启动类型，always 即为 docker 服务重新启动时自动启动本容器<br>-p 参数：容器的 9000 端口映射到本机的 9000 端口。默认是 TCP 映射，当需要 UDP 映射时候，那就再追加一次 UDP 的映射。冒号后面是容器端口，冒号前面是宿主机端口，可以写成一致，也可以写成不一致<br>-v 参数：挂载卷（volume），冒号后面是容器的路径，冒号前面是宿主机的路径，可以写成一致，也可以写成不一致<br>teddysun/shadowsocks-libev：这是从 docker hub 下载回来的镜像完整路径名</p>
+<h4 id="2-3-后期容器处理常用命令"><a href="#2-3-后期容器处理常用命令" class="headerlink" title="2.3 后期容器处理常用命令"></a>2.3 后期容器处理常用命令</h4><p>前面 docker run 后面 –name ss-libev 中的 ss-libev 为 $name，其代表容器识别符，也就是 $name=ss-libev。<br>查看容器在线状态及大小</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line"><span class="variable">$</span> docker <span class="built_in">ps</span> <span class="operator">-as</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>查看容器的运行输出日志</p>
+<figure class="highlight elixir"><table><tr><td class="code"><pre><span class="line"><span class="variable">$ </span>docker logs <span class="variable">$name</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>重新启动容器，一般在修改除端口外的配置后使用使修改生效</p>
+<figure class="highlight elixir"><table><tr><td class="code"><pre><span class="line"><span class="variable">$ </span>docker restart <span class="variable">$name</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>停止容器的运行</p>
+<figure class="highlight elixir"><table><tr><td class="code"><pre><span class="line"><span class="variable">$ </span>docker stop <span class="variable">$name</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>移除容器</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line"><span class="variable">$</span> docker <span class="built_in">rm</span> <span class="variable">$name</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>查看 docker 容器占用 CPU，内存等信息</p>
+<figure class="highlight gams"><table><tr><td class="code"><pre><span class="line"><span class="symbol">$</span> docker stats --<span class="keyword">no</span>-stream</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="三、用-Docker-部署-Shadowsocks-libev-v2ray-plugin-over-websocket-HTTPS"><a href="#三、用-Docker-部署-Shadowsocks-libev-v2ray-plugin-over-websocket-HTTPS" class="headerlink" title="三、用 Docker 部署 Shadowsocks-libev + v2ray-plugin over websocket (HTTPS)"></a>三、用 Docker 部署 Shadowsocks-libev + v2ray-plugin over websocket (HTTPS)</h3><h4 id="3-1-用-acme-sh-脚本申请-SSL-证书"><a href="#3-1-用-acme-sh-脚本申请-SSL-证书" class="headerlink" title="3.1 用 acme.sh 脚本申请 SSL 证书"></a>3.1 用 acme.sh 脚本申请 SSL 证书</h4><p>此处需要用到一个你拥有的域名。参考：<a href="https://ssu.tw/index.php/archives/8/">这篇文章</a>。下面默认你已经获取到 Clouflare API key，并且也已经安装好 acme.sh 脚本。</p>
+<h4 id="3-2-创建配置文件"><a href="#3-2-创建配置文件" class="headerlink" title="3.2 创建配置文件"></a>3.2 创建配置文件</h4><p>在 /etc 目录下创建 shadowsocks-libev 目录</p>
+<figure class="highlight awk"><table><tr><td class="code"><pre><span class="line">$ mkdir <span class="regexp">/etc/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>切换目录至 /etc/shadowsocks-libev</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ cd <span class="regexp">/etc/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>创建 config.json 的配置文件</p>
+<figure class="highlight mipsasm"><table><tr><td class="code"><pre><span class="line">$ vim <span class="built_in">config</span>.<span class="keyword">json</span></span><br><span class="line"><span class="keyword"></span></span><br></pre></td></tr></table></figure>
+
+<p>以下为配置文件内容示例，添加后保存并退出</p>
+<figure class="highlight json"><table><tr><td class="code"><pre><span class="line">&#123;</span><br><span class="line"><span class="attr">&quot;server&quot;</span>:<span class="string">&quot;0.0.0.0&quot;</span>,</span><br><span class="line"><span class="attr">&quot;server_port&quot;</span>:<span class="number">9000</span>,</span><br><span class="line"><span class="attr">&quot;password&quot;</span>:<span class="string">&quot;password0&quot;</span>,</span><br><span class="line"><span class="attr">&quot;timeout&quot;</span>:<span class="number">300</span>,</span><br><span class="line"><span class="attr">&quot;method&quot;</span>:<span class="string">&quot;aes-256-gcm&quot;</span>,</span><br><span class="line"><span class="attr">&quot;fast_open&quot;</span>:<span class="literal">false</span>,</span><br><span class="line"><span class="attr">&quot;nameserver&quot;</span>:<span class="string">&quot;8.8.8.8&quot;</span>,</span><br><span class="line"><span class="attr">&quot;mode&quot;</span>:<span class="string">&quot;tcp_and_udp&quot;</span>,</span><br><span class="line"><span class="attr">&quot;plugin&quot;</span>:<span class="string">&quot;v2ray-plugin&quot;</span>,</span><br><span class="line"><span class="attr">&quot;plugin_opts&quot;</span>:<span class="string">&quot;server;tls;host=mydomain.me;cert=/etc/shadowsocks-libev/plugin.crt;key=/etc/shadowsocks-libev/plugin.key&quot;</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><strong>说明：</strong>server 后面的 0.0.0.0 不要修改，plugin_opts 后面的配置除了域名外也不要修改</p>
+<h4 id="3-3-安装证书到-Shadowsocks-libev-配置文件的目录-etc-shadowsocks-libev"><a href="#3-3-安装证书到-Shadowsocks-libev-配置文件的目录-etc-shadowsocks-libev" class="headerlink" title="3.3 安装证书到 Shadowsocks-libev 配置文件的目录 /etc/shadowsocks-libev"></a>3.3 安装证书到 Shadowsocks-libev 配置文件的目录 /etc/shadowsocks-libev</h4><p>假设你的是域名是 mydomain.me，且已经在 Cloudflare 上设置好 A 记录解析<br>CF_Key 的值替换成你自己的 Cloudflare API Key</p>
+<figure class="highlight routeros"><table><tr><td class="code"><pre><span class="line">$ <span class="builtin-name">export</span> <span class="attribute">CF_Key</span>=<span class="string">&quot;xxxxxxxxxxxxxxxxxxxxxxxxxxx&quot;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>CF_Email 的值替换成你自己的 Cloudflare 注册邮箱账号名</p>
+<figure class="highlight routeros"><table><tr><td class="code"><pre><span class="line">$ <span class="builtin-name">export</span> <span class="attribute">CF_Email</span>=<span class="string">&quot;youremail@gmail.com&quot;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>用 acme.sh 脚本申请证书</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">$ acme.<span class="keyword">sh</span> --issue --dns dns_cf -d mydomain.<span class="keyword">me</span> -<span class="keyword">k</span> <span class="keyword">ec</span>-<span class="number">256</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>安装证书到 Shadowsocks-libev 配置文件的目录 /etc/shadowsocks-libev</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ acme.sh --installcert -d mydomain.me --fullchain-<span class="keyword">file</span> <span class="regexp">/etc/</span>shadowsocks-libev<span class="regexp">/plugin.crt --key-file /</span>etc<span class="regexp">/shadowsocks-libev/</span>plugin.key --ecc</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h4 id="3-4-用-Docker-结合上面的配置文件创建并启动容器"><a href="#3-4-用-Docker-结合上面的配置文件创建并启动容器" class="headerlink" title="3.4 用 Docker 结合上面的配置文件创建并启动容器"></a>3.4 用 Docker 结合上面的配置文件创建并启动容器</h4><figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ docker run -d --name ss-libev --restart always -p <span class="number">9000</span>:<span class="number">9000</span> -p <span class="number">9000</span>:<span class="number">9000</span><span class="regexp">/udp -v /</span>etc<span class="regexp">/shadowsocks-libev:/</span>etc<span class="regexp">/shadowsocks-libev teddysun/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="四、用-Docker-部署-Shadowsocks-libev-v2ray-plugin-over-websocket-HTTP-TLS-caddy-CDN"><a href="#四、用-Docker-部署-Shadowsocks-libev-v2ray-plugin-over-websocket-HTTP-TLS-caddy-CDN" class="headerlink" title="四、用 Docker 部署 Shadowsocks-libev + v2ray-plugin over websocket (HTTP) + TLS + caddy + CDN"></a>四、用 Docker 部署 Shadowsocks-libev + v2ray-plugin over websocket (HTTP) + TLS + caddy + CDN</h3><h4 id="4-1-申请-SSL-证书以及安装证书"><a href="#4-1-申请-SSL-证书以及安装证书" class="headerlink" title="4.1 申请 SSL 证书以及安装证书"></a>4.1 申请 SSL 证书以及安装证书</h4><p>参考上面的 3.1 和 3.3 章节。</p>
+<h4 id="4-2-创建配置文件"><a href="#4-2-创建配置文件" class="headerlink" title="4.2 创建配置文件"></a>4.2 创建配置文件</h4><p>在 /etc 目录下创建 shadowsocks-libev 目录</p>
+<figure class="highlight awk"><table><tr><td class="code"><pre><span class="line">$ mkdir <span class="regexp">/etc/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>切换目录至 /etc/shadowsocks-libev</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ cd <span class="regexp">/etc/</span>shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>创建 config.json 的配置文件</p>
+<figure class="highlight mipsasm"><table><tr><td class="code"><pre><span class="line">$ vim <span class="built_in">config</span>.<span class="keyword">json</span></span><br><span class="line"><span class="keyword"></span></span><br></pre></td></tr></table></figure>
+
+<p>以下为配置文件内容示例，添加后保存并退出</p>
+<figure class="highlight json"><table><tr><td class="code"><pre><span class="line">&#123;</span><br><span class="line"><span class="attr">&quot;server&quot;</span>:<span class="string">&quot;127.0.0.1&quot;</span>,</span><br><span class="line"><span class="attr">&quot;server_port&quot;</span>:<span class="number">9000</span>,</span><br><span class="line"><span class="attr">&quot;password&quot;</span>:<span class="string">&quot;password0&quot;</span>,</span><br><span class="line"><span class="attr">&quot;timeout&quot;</span>:<span class="number">300</span>,</span><br><span class="line"><span class="attr">&quot;method&quot;</span>:<span class="string">&quot;aes-256-gcm&quot;</span>,</span><br><span class="line"><span class="attr">&quot;fast_open&quot;</span>:<span class="literal">false</span>,</span><br><span class="line"><span class="attr">&quot;nameserver&quot;</span>:<span class="string">&quot;8.8.8.8&quot;</span>,</span><br><span class="line"><span class="attr">&quot;mode&quot;</span>:<span class="string">&quot;tcp_and_udp&quot;</span>,</span><br><span class="line"><span class="attr">&quot;plugin&quot;</span>:<span class="string">&quot;v2ray-plugin&quot;</span>,</span><br><span class="line"><span class="attr">&quot;plugin_opts&quot;</span>:<span class="string">&quot;server;path=/ray&quot;</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><strong>说明：</strong>因为要监听本地，所以 server 后面地址填 127.0.0.1， 9000 端口不对外开放，此处只是在 websocket 的配置上加了个 path 参数（后面的值可以更改，比如可以改为 path=/teddysun），tls 则要由 caddy 来提供。</p>
+<h4 id="4-3-用-Docker-结合上面的配置文件创建并启动容器"><a href="#4-3-用-Docker-结合上面的配置文件创建并启动容器" class="headerlink" title="4.3 用 Docker 结合上面的配置文件创建并启动容器"></a>4.3 用 Docker 结合上面的配置文件创建并启动容器</h4><p>命令如下：</p>
+<figure class="highlight jboss-cli"><table><tr><td class="code"><pre><span class="line">$ docker run -d <span class="params">--name</span> ss-libev <span class="params">--restart</span> always <span class="params">--net</span> host -v <span class="string">/etc/shadowsocks-libev</span>:<span class="string">/etc/shadowsocks-libev</span> teddysun/shadowsocks-libev</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><strong>说明：</strong>此处不用端口映射，直接使用</p>
+<figure class="highlight haskell"><table><tr><td class="code"><pre><span class="line"><span class="comment">--net host</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>参数配置，让容器跟宿主机共用网络。</p>
+<h4 id="4-4-安装-caddy"><a href="#4-4-安装-caddy" class="headerlink" title="4.4 安装 caddy"></a>4.4 安装 caddy</h4><p>执行下面一条命令安装 caddy v1.0.5，并把它放到 /usr/bin 目录下（此为 Linux x86_64 系统示例）</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ wget -O <span class="regexp">/usr/</span>bin<span class="regexp">/caddy https:/</span><span class="regexp">/dl.lamp.sh/</span>files/caddy_linux_amd64</span><br><span class="line">$ chmod <span class="number">755</span> <span class="regexp">/usr/</span>bin/caddy</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>如果是 Linux x86 系统，则执行如下命令</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ wget -O <span class="regexp">/usr/</span>bin<span class="regexp">/caddy https:/</span><span class="regexp">/dl.lamp.sh/</span>files/caddy_linux_386</span><br><span class="line">$ chmod <span class="number">755</span> <span class="regexp">/usr/</span>bin/caddy</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h4 id="4-5-配置-caddy-目录"><a href="#4-5-配置-caddy-目录" class="headerlink" title="4.5 配置 caddy 目录"></a>4.5 配置 caddy 目录</h4><p>在 / root 目录下创建 caddy 目录并切换至此</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">$ <span class="keyword">cd</span> /root &amp;&amp; <span class="built_in">mkdir</span> caddy &amp;&amp; <span class="keyword">cd</span> caddy</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>安装证书和 key 到 /root/caddy 目录下</p>
+<figure class="highlight gradle"><table><tr><td class="code"><pre><span class="line">$ acme.sh --installcert -d mydomain.me --fullchain-<span class="keyword">file</span> <span class="regexp">/root/</span>caddy<span class="regexp">/caddy.crt --key-file /</span>root<span class="regexp">/caddy/</span>caddy.key --ecc</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h4 id="4-6-创建-caddy-配置文件"><a href="#4-6-创建-caddy-配置文件" class="headerlink" title="4.6 创建 caddy 配置文件"></a>4.6 创建 caddy 配置文件</h4><p>创建文件并开始编辑 caddy 配置文件 caddy.conf</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">$ <span class="keyword">vim</span> caddy.<span class="keyword">conf</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>下面是 caddy 配置文件示例，添加后保存并退出</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">mydomain.<span class="keyword">me</span>:<span class="number">443</span> &#123;</span><br><span class="line">  gzip</span><br><span class="line">  tls /root/caddy/caddy.crt /root/caddy/caddy.key</span><br><span class="line">  <span class="built_in">log</span> /root/caddy/caddy.<span class="built_in">log</span></span><br><span class="line">  proxy / http<span class="variable">s:</span>//www.baidu.<span class="keyword">com</span></span><br><span class="line">  proxy /ray <span class="number">127.0</span>.<span class="number">0.1</span>:<span class="number">9000</span> &#123;</span><br><span class="line">    websocket</span><br><span class="line">    header_upstream -Origin</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><strong>说明：</strong>此处只要关注路径和端口号，9000 是 /etc/shadowsocks-libev/config.json 里配置的，/ray 是配置文件内 plugin_opts 后面的 path=/ray，请注意替换。另 caddy 需要监听 443 端口，请确保 VPS 的 443 端口没有被占用。</p>
+<h4 id="4-7-运行-caddy"><a href="#4-7-运行-caddy" class="headerlink" title="4.7 运行 caddy"></a>4.7 运行 caddy</h4><p>后台运行 caddy</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">$ nohup caddy -<span class="keyword">conf</span> /root/caddy/caddy.<span class="keyword">conf</span> &amp;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>可以查看 caddy 运行产生的日志</p>
+<figure class="highlight awk"><table><tr><td class="code"><pre><span class="line">$ cat <span class="regexp">/root/</span>caddy/caddy.log</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>确认 caddy 运行状态，下面的命令有输出则表示正常</p>
+<figure class="highlight vim"><table><tr><td class="code"><pre><span class="line">$ <span class="keyword">ps</span> -ef | <span class="keyword">grep</span> -v <span class="keyword">grep</span> | <span class="keyword">grep</span> caddy</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h4 id="4-8-开启-Cloudflare-的-CDN-保护，开启-SSL-TLS-的-Full-模式"><a href="#4-8-开启-Cloudflare-的-CDN-保护，开启-SSL-TLS-的-Full-模式" class="headerlink" title="4.8 开启 Cloudflare 的 CDN 保护，开启 SSL/TLS 的 Full 模式"></a>4.8 开启 Cloudflare 的 CDN 保护，开启 SSL/TLS 的 Full 模式</h4><p>如下图所示，第 1 步，开启 CDN</p>
+<p><img src="https://teddysun.com/wp-content/uploads/2019/ws_1.png"></p>
+<p>如下图所示，第 2 步，开启 Full 模式</p>
+<p><img src="https://teddysun.com/wp-content/uploads/2019/ws_2.png"></p>
+<h3 id="五、客户端配置"><a href="#五、客户端配置" class="headerlink" title="五、客户端配置"></a>五、客户端配置</h3><h4 id="5-1-Windows-客户端"><a href="#5-1-Windows-客户端" class="headerlink" title="5.1 Windows 客户端"></a>5.1 Windows 客户端</h4><p>先到<a href="https://github.com/shadowsocks/v2ray-plugin/releases">这个链接</a>下载 v2ray-plugin-windows-amd64 的安装包，下载完成后解压到 <a href="https://github.com/shadowsocks/shadowsocks-windows/releases">shadowsocks-windows</a> 的安装目录下，并重命名为 v2ray-plugin.exe 即可。<br><strong>选项说明：</strong><br>插件程序：v2ray-plugin<br>如果选的是第一种，Shadowsocks-libev + v2ray-plugin over websocket (HTTP)，<strong>插件选项</strong>这里可以留空<br>如果选的是第二种，Shadowsocks-libev + v2ray-plugin over websocket (HTTPS)，<strong>插件选项</strong>这里填 tls;host=mydomain.me<br>如果选的是第三种，Shadowsocks-libev + v2ray-plugin over websocket (HTTP) + TLS + caddy + CDN，<strong>插件选项</strong>这里填 tls;host=mydomain.me;path=/ray<br>值得注意的是：如果你把 plugin_opts 改为</p>
+<figure class="highlight llvm"><table><tr><td class="code"><pre><span class="line"><span class="string">&quot;plugin_opts&quot;</span>:<span class="string">&quot;server;mux=0&quot;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>后就可以用 Quantumult X 来使用这个节点，但 Windows 客户端不能直接使用了。</p>
+<h4 id="5-2-Android-客户端"><a href="#5-2-Android-客户端" class="headerlink" title="5.2 Android 客户端"></a>5.2 Android 客户端</h4><p>先到<a href="https://github.com/shadowsocks/v2ray-plugin-android/releases">这个链接</a>下载插件并安装，其余的配置都跟上面 Windows 客户端一致。</p>
+<h4 id="5-3-iOS-客户端"><a href="#5-3-iOS-客户端" class="headerlink" title="5.3 iOS 客户端"></a>5.3 iOS 客户端</h4><p>请使用 Shadowrocket，也就是俗称的小火箭，添加如下配置使用。<br>填写服务器，端口，密码，选择算法，插件选择 v2ray-plugin</p>
+<p><img src="https://teddysun.com/wp-content/uploads/2019/ws_3.png"></p>
+<p>点击插件 v2ray-plugin</p>
+<p><img src="https://teddysun.com/wp-content/uploads/2019/ws_4.png"></p>
+<p>设置插件 v2ray-plugin，开启 TLS，填写路径，服务器则填写你的域名</p>
+<p><img src="https://teddysun.com/wp-content/uploads/2019/ws_5.png"></p>
+<h3 id="六、写在最后"><a href="#六、写在最后" class="headerlink" title="六、写在最后"></a>六、写在最后</h3><p>本文为网友【<a href="https://ssu.tw/">毕世平</a>】所总结，我只是在其基础上稍作修改。如有不对的地方，欢迎在评论里指出。</p>
+<h3 id="参考链接："><a href="#参考链接：" class="headerlink" title="参考链接："></a>参考链接：</h3><p><a href="https://ssu.tw/index.php/archives/31/">https://ssu.tw/index.php/archives/31/</a></p>
+<p>转载请注明：<a href="https://teddysun.com/">秋水逸冰</a> » <a href="https://teddysun.com/569.html">使用 Docker 快速部署 Shadowsocks-libev + v2ray-plugin</a></p>
+]]></content>
+      <categories>
+        <category>转载</category>
+      </categories>
+      <tags>
+        <tag>秋水逸冰</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>终于找到了郁闷人生的原因――观《肖申克的救赎》有感</title>
     <url>/2021/03/15/%E7%BB%88%E4%BA%8E%E6%89%BE%E5%88%B0%E4%BA%86%E9%83%81%E9%97%B7%E4%BA%BA%E7%94%9F%E7%9A%84%E5%8E%9F%E5%9B%A0%E2%80%95%E2%80%95%E8%A7%82%E3%80%8A%E8%82%96%E7%94%B3%E5%85%8B%E7%9A%84%E6%95%91%E8%B5%8E%E3%80%8B%E6%9C%89%E6%84%9F/</url>
     <content><![CDATA[<p>周末看了一部美国影片《肖申克的救赎》（《The Shawshank Redemption》）<br>讲的是一位因冤案入狱的年轻银行家在牢中如何追寻自由的故事。</p>
